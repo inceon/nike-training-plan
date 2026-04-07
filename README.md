@@ -112,7 +112,27 @@ Deploy flow:
    - `buildCommand`: `cd frontend && npm run build`
    - `outputDirectory`: `frontend/dist`
 
+Recommended Vercel dashboard settings:
+
+- Framework Preset: `Other`
+- Root Directory: `.`
+- Install Command: `cd frontend && npm install`
+- Build Command: `cd frontend && npm run build`
+- Output Directory: `frontend/dist`
+- Node.js Version: `20.x`
+- Environment Variables: none required
+- Auto Deploy: enabled for `main`
+
 Before deploying, make sure these generated assets already exist in the repo:
 
 - [`output/parsed_training_plan.uk.pretty.json`](/Users/inceon/Develop/nike-training-plan/output/parsed_training_plan.uk.pretty.json)
 - [`frontend/public/week-previews/`](/Users/inceon/Develop/nike-training-plan/frontend/public/week-previews)
+
+## CI
+
+GitHub Actions is configured in [ci.yml](/Users/inceon/Develop/nike-training-plan/.github/workflows/ci.yml).
+
+It runs:
+
+- `pytest -q` for the parser
+- `npm run build` in [`frontend/`](/Users/inceon/Develop/nike-training-plan/frontend)
