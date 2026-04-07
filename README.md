@@ -1,5 +1,19 @@
 # Nike Marathon PDF Parser
 
+[![CI](https://github.com/inceon/nike-training-plan/actions/workflows/ci.yml/badge.svg)](https://github.com/inceon/nike-training-plan/actions/workflows/ci.yml)
+[![Vercel Ready](https://img.shields.io/badge/Vercel-ready-black?logo=vercel)](https://vercel.com/)
+[![Status](https://img.shields.io/badge/status-active-2f855a)](https://github.com/inceon/nike-training-plan)
+[![Parser](https://img.shields.io/badge/parser-rule--based-1f6feb)](https://github.com/inceon/nike-training-plan/tree/main/parser)
+[![Frontend](https://img.shields.io/badge/frontend-react%20%2B%20vite-61dafb?logo=react&logoColor=222)](https://github.com/inceon/nike-training-plan/tree/main/frontend)
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyMuPDF](https://img.shields.io/badge/PyMuPDF-fitz-009688)](https://pymupdf.readthedocs.io/)
+[![pdfplumber](https://img.shields.io/badge/pdfplumber-table%20extract-8b5cf6)](https://github.com/jsvine/pdfplumber)
+[![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Radix Themes](https://img.shields.io/badge/Radix_Themes-UI-111111)](https://www.radix-ui.com/themes)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+
 ## Design
 
 The parser is layout-aware and rule-based.
