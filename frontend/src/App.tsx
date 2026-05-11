@@ -2,11 +2,9 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 
 import {
   Badge,
   Button,
-  Card,
   Dialog,
   Flex,
   Heading,
-  Separator,
   Text,
   TextField,
 } from "@radix-ui/themes";
@@ -22,6 +20,7 @@ import {
   PACE_PROFILE_LABELS,
   findNearestRow,
   formatDuration,
+  profileFrom10kPace,
   profileFromRow,
   resolvePaceLabel,
   summarizeSegment,
@@ -32,6 +31,9 @@ import {
 import type { PaceTableRow, SampleScheduleRow, ScheduleDayEntry, WeekPlan, Workout } from "./types";
 
 const plan = documentData;
+const BASE_10K_PACE = "4:52";
+const FINAL_WEEK_NUMBER = plan.weeks.length;
+const RACE_WEEK_START_UTC = Date.UTC(2026, 8, 14);
 
 type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type DragPayload = {
@@ -71,13 +73,8 @@ const dayShortLabels: Record<DayKey, string> = {
   sunday: "Нд",
 };
 
-const initialRow = (() => {
-  const row = plan.pace_table[6] ?? plan.pace_table[0];
-  if (!row) {
-    throw new Error("Pace table data is required for the frontend.");
-  }
-  return row;
-})();
+const initialPaceProfile = profileFrom10kPace(plan.pace_table, BASE_10K_PACE);
+const initialRow = findNearestRow(plan.pace_table, initialPaceProfile);
 
 const initialWeek = (() => {
   const week = plan.weeks[0];
@@ -91,7 +88,7 @@ const STORAGE_KEY = "nike-training-plan.calendar-assignments.v1";
 
 export default function App() {
   const [selectedRowIndex, setSelectedRowIndex] = useState(initialRow.row_index);
-  const [paceProfile, setPaceProfile] = useState<PaceProfile>(() => profileFromRow(initialRow));
+  const [paceProfile, setPaceProfile] = useState<PaceProfile>(() => initialPaceProfile);
   const [selectedWeek, setSelectedWeek] = useState<WeekPlan>(initialWeek);
   const [selectedDay, setSelectedDay] = useState<DayKey>("monday");
   const [weekFilter, setWeekFilter] = useState("");
@@ -109,10 +106,8 @@ export default function App() {
     () => plan.sample_schedule.find((row) => row.week_number === selectedWeek.week_number) ?? null,
     [selectedWeek.week_number],
   );
-  const selectedWeekPreviewSrc = useMemo(
-    () => `/week-previews/week-${String(selectedWeek.week_number).padStart(2, "0")}-page-${selectedWeek.source_pages[0]}.png`,
-    [selectedWeek.week_number, selectedWeek.source_pages],
-  );
+  const selectedWeekPreviewSrc = `/week-previews/week-${String(selectedWeek.week_number).padStart(2, "0")}-page-${selectedWeek.source_pages[0]}.png`;
+  const selectedWeekDateRange = formatWeekDateRange(selectedWeek.week_number);
   const defaultAssignments = useMemo(
     () => buildDefaultAssignments(selectedWeek, selectedSchedule),
     [selectedSchedule, selectedWeek],
@@ -137,6 +132,7 @@ export default function App() {
         const assignedWorkoutId = currentAssignments[dayKey];
         return {
           dayKey,
+          dateLabel: formatDayDate(selectedWeek.week_number, dayKeys.indexOf(dayKey)),
           entry,
           workout: assignedWorkoutId ? selectedWeek.workouts.find((workout) => workout.id === assignedWorkoutId) ?? null : null,
           isOverride: currentAssignments[dayKey] !== defaultAssignments[dayKey],
@@ -147,10 +143,6 @@ export default function App() {
   const selectedDayColumn = useMemo(
     () => dayColumns.find((column) => column.dayKey === selectedDay) ?? dayColumns[0] ?? null,
     [dayColumns, selectedDay],
-  );
-  const assignedWorkoutIds = useMemo(
-    () => new Set(dayKeys.map((dayKey) => currentAssignments[dayKey]).filter((value): value is string => Boolean(value))),
-    [currentAssignments],
   );
   const exportPayload = useMemo(
     () => buildCalendarExport(plan.weeks, plan.sample_schedule, assignmentOverrides, paceProfile, recommendedRow.row_index),
@@ -232,19 +224,18 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_transparent_35%),linear-gradient(180deg,_#fcfbf8,_#f5f1e8)]">
-      <div className="mx-auto flex max-w-[1560px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 rounded-3xl border border-stone-200 bg-white/85 p-5 shadow-sm backdrop-blur sm:p-6 xl:flex-row xl:items-start xl:justify-between">
+    <div className="min-h-screen bg-neutral-50">
+      <div className="mx-auto flex max-w-[1520px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-5 border-b border-neutral-200 pb-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-2xl">
-            <Text size="1" weight="medium" className="uppercase tracking-[0.18em] text-stone-500">
+            <Text size="1" weight="medium" className="uppercase tracking-[0.14em] text-neutral-500">
               Nike Marathon Planner
             </Text>
-            <Heading size="8" className="mt-2 max-w-xl text-balance text-stone-950">
-              Календар підготовки без зайвого шуму
+            <Heading size="7" className="mt-2 max-w-xl text-balance text-neutral-950">
+              Календар підготовки
             </Heading>
-            <Text size="3" className="mt-3 max-w-2xl text-stone-600">
-              Tailwind для layout, Radix Themes для базових контролів. Тижні, темп і перепризначення залишаються,
-              але інтерфейс спрощено.
+            <Text size="3" className="mt-3 max-w-2xl text-neutral-600">
+              Фінішний тиждень: 14-20.09.2026. Базовий темп 10 км: {BASE_10K_PACE}/км.
             </Text>
           </div>
 
@@ -253,12 +244,12 @@ export default function App() {
               <ChevronLeftIcon />
               Назад
             </Button>
-            <div className="min-w-[140px] rounded-2xl border border-stone-200 bg-stone-50 px-4 py-2 text-center">
-              <Text size="1" className="uppercase tracking-[0.14em] text-stone-500">
+            <div className="min-w-[164px] rounded-lg border border-neutral-200 bg-white px-4 py-2 text-center">
+              <Text size="1" className="uppercase tracking-[0.12em] text-neutral-500">
                 Тиждень {selectedWeek.week_number}
               </Text>
-              <Text size="2" weight="medium" className="block text-stone-900">
-                {selectedWeek.weeks_to_race} до старту
+              <Text size="2" weight="medium" className="block text-neutral-900">
+                {selectedWeekDateRange}
               </Text>
             </div>
             <Button variant="soft" color="gray" onClick={() => moveWeek(1)} disabled={selectedWeekIndex >= plan.weeks.length - 1}>
@@ -290,7 +281,7 @@ export default function App() {
                       Базовий рядок
                     </Text>
                     <select
-                      className="h-10 rounded-xl border border-stone-300 bg-white px-3 text-sm text-stone-900 outline-none"
+                      className="h-10 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none"
                       value={selectedRowIndex}
                       onChange={(event) => {
                         const row = plan.pace_table.find((item) => item.row_index === Number(event.target.value));
@@ -301,7 +292,7 @@ export default function App() {
                     >
                       {plan.pace_table.map((row) => (
                         <option key={row.row_index} value={row.row_index}>
-                          #{row.row_index} · 5K {row.best_5k_result} · recovery {row.recovery_pace}
+                          #{row.row_index} · 10K {row.best_10k_pace}/км · recovery {row.recovery_pace}
                         </option>
                       ))}
                     </select>
@@ -322,18 +313,18 @@ export default function App() {
                     ))}
                   </div>
 
-                  <Card>
+                  <div className="border-t border-neutral-200 pt-4">
                     <Flex direction="column" gap="2">
-                      <Text size="1" className="uppercase tracking-[0.14em] text-stone-500">
+                      <Text size="1" className="uppercase tracking-[0.12em] text-neutral-500">
                         Найближчий профіль
                       </Text>
                       <Heading size="4">Рядок {recommendedRow.row_index}</Heading>
-                      <Text size="2" className="text-stone-600">
+                      <Text size="2" className="text-neutral-600">
                         5K {recommendedRow.best_5k_result} · 10K {recommendedRow.best_10k_result} · марафон{" "}
                         {recommendedRow.best_marathon_result}
                       </Text>
                     </Flex>
-                  </Card>
+                  </div>
 
                   <Flex justify="between" gap="3">
                     <Button variant="soft" color="gray" onClick={() => handleRowSelect(recommendedRow)}>
@@ -349,11 +340,10 @@ export default function App() {
           </div>
         </header>
 
-        <Card className="rounded-3xl">
-          <div className="flex flex-col gap-4 p-5 sm:p-6">
+        <section className="flex flex-col gap-4 border-b border-neutral-200 pb-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                   Навігація планом
                 </Text>
                 <Heading size="5" className="mt-1">
@@ -378,36 +368,34 @@ export default function App() {
                       key={week.week_number}
                       type="button"
                       onClick={() => selectWeek(week)}
-                      className={`w-56 rounded-2xl border px-4 py-3 text-left transition ${
+                      className={`w-56 rounded-lg border px-4 py-3 text-left transition ${
                         active
-                          ? "border-stone-900 bg-stone-900 text-white"
-                          : "border-stone-200 bg-stone-50 text-stone-900 hover:border-stone-300 hover:bg-white"
+                          ? "border-neutral-950 bg-neutral-950 text-white"
+                          : "border-neutral-200 bg-white text-neutral-900 hover:border-neutral-400"
                       }`}
                     >
-                      <div className="text-[11px] uppercase tracking-[0.18em] opacity-70">Тиждень {week.week_number}</div>
+                      <div className="text-[11px] uppercase tracking-[0.14em] opacity-70">Тиждень {week.week_number}</div>
                       <div className="mt-2 line-clamp-2 text-sm font-semibold">{week.headline}</div>
-                      <div className="mt-2 text-xs opacity-75">{week.weeks_to_race} до старту</div>
+                      <div className="mt-2 text-xs opacity-75">{formatWeekDateRange(week.week_number)}</div>
                     </button>
                   );
                 })}
               </div>
             </div>
-          </div>
-        </Card>
+        </section>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex flex-col gap-5">
-            <Card className="rounded-3xl">
-              <div className="flex flex-col gap-5 p-5 sm:p-6">
+            <section className="flex flex-col gap-5 border-b border-neutral-200 pb-6">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                    <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                       Weekly board
                     </Text>
                     <Heading size="6" className="mt-1">
                       {selectedWeek.headline}
                     </Heading>
-                    <Text size="3" className="mt-2 max-w-3xl text-stone-600">
+                    <Text size="3" className="mt-2 max-w-3xl text-neutral-600">
                       {selectedWeek.summary}
                     </Text>
                   </div>
@@ -417,12 +405,12 @@ export default function App() {
                       label="Довгий забіг"
                       value={selectedWeek.long_run ? formatDistanceRange(selectedWeek.long_run) : "Race week"}
                     />
-                    <StatBadge label="Темп" value={`#${recommendedRow.row_index}`} />
+                    <StatBadge label="Темп 10 км" value={`${paceProfile.pace_10k}/км`} />
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <Text size="2" className="text-stone-600">
+                <div className="flex flex-col gap-3 rounded-lg border border-dashed border-neutral-300 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <Text size="2" className="text-neutral-600">
                     Перетягуйте сесії між днями. Зміни зберігаються локально.
                   </Text>
                   <Button variant="soft" color="gray" onClick={resetWeekAssignments} disabled={!hasWeekOverrides}>
@@ -433,10 +421,11 @@ export default function App() {
 
                 <div className="scrollbar-none overflow-x-auto pb-2">
                   <div className="grid min-w-[1540px] grid-cols-7 gap-3">
-                    {dayColumns.map(({ dayKey, entry, workout, isOverride }) => (
+                    {dayColumns.map(({ dayKey, dateLabel, entry, workout, isOverride }) => (
                       <DayColumn
                         key={dayKey}
                         dayKey={dayKey}
+                        dateLabel={dateLabel}
                         entry={entry}
                         workout={workout}
                         paceProfile={paceProfile}
@@ -452,33 +441,31 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-              </div>
-            </Card>
+            </section>
 
-            <Card className="rounded-3xl">
-              <div className="flex flex-col gap-5 p-5 sm:p-6">
+            <section className="flex flex-col gap-5 border-b border-neutral-200 pb-6">
                 <div className="flex flex-col gap-2">
-                  <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                  <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                     Assignments
                   </Text>
                   <Heading size="5">Деталі вибраного дня</Heading>
-                  <Text size="2" className="text-stone-600">
-                    Без повторного списку всіх тренувань. Унизу тільки повна деталізація активного дня.
+                  <Text size="2" className="text-neutral-600">
+                    Активний день і повна структура тренування.
                   </Text>
                 </div>
 
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                      <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                         Selected day
                       </Text>
                       <Heading size="4" className="mt-1">
                         {selectedDayColumn ? dayLabels[selectedDayColumn.dayKey] : "День не вибрано"}
                       </Heading>
                     </div>
-                    <Text size="2" className="text-stone-500">
-                      {selectedDayColumn?.entry?.label ?? "Немає слоту в матриці"}
+                    <Text size="2" className="text-neutral-500">
+                      {selectedDayColumn ? `${selectedDayColumn.dateLabel} · ${selectedDayColumn.entry?.label ?? "Немає слоту"}` : ""}
                     </Text>
                   </div>
 
@@ -489,20 +476,18 @@ export default function App() {
                       assignmentDay={selectedDayColumn.dayKey}
                     />
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-5 text-sm text-stone-600">
+                    <div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-5 text-sm text-neutral-600">
                       Для цього дня зараз немає призначеного тренування. Можна перетягнути сесію з іншого дня.
                     </div>
                   )}
                 </div>
-              </div>
-            </Card>
+            </section>
           </div>
 
           <aside className="flex flex-col gap-5">
-            <Card className="rounded-3xl">
-              <div className="flex flex-col gap-4 p-5">
+            <section className="flex flex-col gap-4 border-b border-neutral-200 pb-5">
                 <div>
-                  <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                  <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                     PDF source
                   </Text>
                   <Heading size="4" className="mt-1">
@@ -513,7 +498,7 @@ export default function App() {
                   <Dialog.Trigger>
                     <button
                       type="button"
-                      className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 transition hover:border-stone-300"
+                      className="overflow-hidden rounded-lg border border-neutral-200 bg-white transition hover:border-neutral-400"
                     >
                       <img
                         src={selectedWeekPreviewSrc}
@@ -528,7 +513,8 @@ export default function App() {
                         <div>
                           <Dialog.Title>Оригінальна сторінка PDF</Dialog.Title>
                           <Dialog.Description>
-                            Тиждень {selectedWeek.week_number}, сторінка {selectedWeek.source_pages.join(", ")}
+                            Тиждень {selectedWeek.week_number} ({selectedWeekDateRange}), сторінка{" "}
+                            {selectedWeek.source_pages.join(", ")}
                           </Dialog.Description>
                         </div>
                         <Dialog.Close>
@@ -537,7 +523,7 @@ export default function App() {
                           </Button>
                         </Dialog.Close>
                       </div>
-                      <div className="max-h-[82vh] overflow-auto rounded-2xl border border-stone-200 bg-stone-50 p-2">
+                      <div className="max-h-[82vh] overflow-auto rounded-lg border border-neutral-200 bg-white p-2">
                         <img
                           src={selectedWeekPreviewSrc}
                           alt={`PDF preview fullscreen for week ${selectedWeek.week_number}`}
@@ -547,14 +533,12 @@ export default function App() {
                     </div>
                   </Dialog.Content>
                 </Dialog.Root>
-              </div>
-            </Card>
+            </section>
 
-            <Card className="rounded-3xl">
-              <div className="flex flex-col gap-4 p-5">
+            <section className="flex flex-col gap-4 border-b border-neutral-200 pb-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+                    <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
                       Pace profile
                     </Text>
                     <Heading size="4" className="mt-1">
@@ -569,8 +553,8 @@ export default function App() {
 
                 <div className="grid gap-2">
                   {(Object.keys(PACE_PROFILE_LABELS) as PaceProfileKey[]).map((key) => (
-                    <div key={key} className="flex items-center justify-between rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2">
-                      <Text size="2" className="text-stone-600">
+                    <div key={key} className="flex items-center justify-between border-b border-neutral-200 py-2">
+                      <Text size="2" className="text-neutral-600">
                         {translatePaceLabel(PACE_PROFILE_LABELS[key])}
                       </Text>
                       <Text size="2" weight="medium">
@@ -579,8 +563,7 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              </div>
-            </Card>
+            </section>
           </aside>
         </div>
       </div>
@@ -590,11 +573,11 @@ export default function App() {
 
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2">
-      <Text size="1" className="uppercase tracking-[0.14em] text-stone-500">
+    <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
+      <Text size="1" className="uppercase tracking-[0.12em] text-neutral-500">
         {label}
       </Text>
-      <Text size="2" weight="medium" className="block text-stone-900">
+      <Text size="2" weight="medium" className="block text-neutral-900">
         {value}
       </Text>
     </div>
@@ -603,6 +586,7 @@ function StatBadge({ label, value }: { label: string; value: string }) {
 
 function DayColumn({
   dayKey,
+  dateLabel,
   entry,
   workout,
   paceProfile,
@@ -616,6 +600,7 @@ function DayColumn({
   onDragEnd,
 }: {
   dayKey: DayKey;
+  dateLabel: string;
   entry: ScheduleDayEntry | null;
   workout: Workout | null;
   paceProfile: PaceProfile;
@@ -634,11 +619,11 @@ function DayColumn({
     <button
       type="button"
       onClick={() => onSelectDay(dayKey)}
-      className={`flex min-h-[320px] flex-col gap-3 rounded-3xl border p-4 text-left transition ${
+      className={`flex min-h-[320px] flex-col gap-3 rounded-lg border p-4 text-left transition ${
         isSelected
-          ? "border-stone-900 bg-white shadow-sm"
-          : "border-stone-200 bg-stone-50 hover:border-stone-300 hover:bg-white"
-      } ${isOverride ? "ring-1 ring-stone-300" : ""} ${isDragTarget ? "border-dashed" : ""}`}
+          ? "border-neutral-950 bg-white"
+          : "border-neutral-200 bg-white hover:border-neutral-400"
+      } ${isOverride ? "ring-1 ring-neutral-300" : ""} ${isDragTarget ? "border-dashed" : ""}`}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -650,16 +635,17 @@ function DayColumn({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">{dayShortLabels[dayKey]}</div>
-          <div className="mt-1 text-sm font-semibold text-stone-900">{dayLabels[dayKey]}</div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-neutral-500">{dayShortLabels[dayKey]}</div>
+          <div className="mt-1 text-sm font-semibold text-neutral-900">{dayLabels[dayKey]}</div>
+          <div className="mt-0.5 text-xs text-neutral-500">{dateLabel}</div>
         </div>
         <div className="flex flex-col items-end gap-1">
           {isOverride ? <Badge variant="soft" color="gray">custom</Badge> : null}
-          {isLongRun ? <Badge variant="soft" color="brown">long</Badge> : null}
+          {isLongRun ? <Badge variant="soft" color="red">long</Badge> : null}
         </div>
       </div>
 
-      <Text size="1" className="text-stone-500">
+      <Text size="1" className="text-neutral-500">
         {entry?.label ?? "Немає слоту в матриці"}
       </Text>
 
@@ -692,7 +678,7 @@ function DayColumn({
           </div>
         </div>
       ) : (
-        <div className="mt-auto rounded-2xl border border-dashed border-stone-300 bg-white/70 px-3 py-4 text-sm text-stone-500">
+        <div className="mt-auto rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-sm text-neutral-500">
           Порожній слот
         </div>
       )}
@@ -711,11 +697,10 @@ function WorkoutDetailCard({
 }) {
   const projectedPace = summarizeWorkoutPace(workout, paceProfile);
   return (
-    <Card className="rounded-3xl">
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
+    <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Text size="1" className="uppercase tracking-[0.18em] text-stone-500">
+            <Text size="1" className="uppercase tracking-[0.14em] text-neutral-500">
               {humanize(workout.workout_type)}
             </Text>
             <Heading size="5" className="mt-1">
@@ -734,18 +719,18 @@ function WorkoutDetailCard({
           </div>
         </div>
 
-        <Text size="3" className="text-stone-600">
+        <Text size="3" className="text-neutral-600">
           {workout.description}
         </Text>
 
         {workout.segments.length > 0 ? (
           <div className="grid gap-3">
             {workout.segments.map((segment) => (
-              <div key={`${workout.id}-${segment.order}-${segment.instructions}`} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                <div className="text-sm font-semibold text-stone-900">{summarizeSegment(segment, paceProfile)}</div>
-                <div className="mt-1 text-sm text-stone-600">{segment.instructions}</div>
+              <div key={`${workout.id}-${segment.order}-${segment.instructions}`} className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+                <div className="text-sm font-semibold text-neutral-900">{summarizeSegment(segment, paceProfile)}</div>
+                <div className="mt-1 text-sm text-neutral-600">{segment.instructions}</div>
                 {segment.recovery_seconds ? (
-                  <div className="mt-2 text-xs uppercase tracking-[0.14em] text-stone-500">
+                  <div className="mt-2 text-xs uppercase tracking-[0.12em] text-neutral-500">
                     Відновлення {formatDuration(segment.recovery_seconds)}
                   </div>
                 ) : null}
@@ -755,35 +740,34 @@ function WorkoutDetailCard({
         ) : null}
 
         {workout.recovery_between_segments ? (
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-            <Text size="1" className="uppercase tracking-[0.14em] text-stone-500">
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+            <Text size="1" className="uppercase tracking-[0.12em] text-neutral-500">
               Між відрізками
             </Text>
-            <Text size="2" className="mt-1 text-stone-600">
+            <Text size="2" className="mt-1 text-neutral-600">
               {workout.recovery_between_segments}
             </Text>
           </div>
         ) : null}
 
         {workout.notes.length > 0 ? (
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-            <Text size="1" className="uppercase tracking-[0.14em] text-stone-500">
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+            <Text size="1" className="uppercase tracking-[0.12em] text-neutral-500">
               Нотатки
             </Text>
-            <Text size="2" className="mt-1 text-stone-600">
+            <Text size="2" className="mt-1 text-neutral-600">
               {workout.notes.join(" ")}
             </Text>
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 border-t border-stone-200 pt-3 text-sm text-stone-500">
+        <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3 text-sm text-neutral-500">
           <span>Сторінка {workout.source.page_numbers.join(", ")}</span>
           {resolvePaceLabel(workout.target_pace_type, paceProfile) ? (
             <span>{resolvePaceLabel(workout.target_pace_type, paceProfile)}</span>
           ) : null}
         </div>
       </div>
-    </Card>
   );
 }
 
@@ -916,6 +900,8 @@ function buildCalendarExport(
       return {
         day_key: dayKey,
         day_label: dayLabels[dayKey],
+        date: formatIsoDate(getDayDate(week.week_number, dayKeys.indexOf(dayKey))),
+        date_label: formatDayDate(week.week_number, dayKeys.indexOf(dayKey)),
         matrix_label: scheduleEntry?.label ?? null,
         source_workout_ref: scheduleEntry?.workout_ref ?? null,
         source_workout_id: defaultWorkoutId,
@@ -928,20 +914,30 @@ function buildCalendarExport(
       };
     });
 
-    const assignedIds = new Set(days.map((day) => day.assigned_workout_id).filter((value): value is string => Boolean(value)));
-    const unassignedWorkouts = week.workouts
-      .filter((workout) => !assignedIds.has(workout.id))
-      .map((workout) => ({
+    const assignedIds = new Set<string>();
+    for (const day of days) {
+      if (day.assigned_workout_id) {
+        assignedIds.add(day.assigned_workout_id);
+      }
+    }
+
+    const unassignedWorkouts = [];
+    for (const workout of week.workouts) {
+      if (!assignedIds.has(workout.id)) {
+        unassignedWorkouts.push({
         workout_id: workout.id,
         title: workout.title,
         workout_type: workout.workout_type,
         subtype: workout.subtype,
         target_pace: summarizeWorkoutPace(workout, paceProfile),
-      }));
+        });
+      }
+    }
 
     return {
       week_number: week.week_number,
       weeks_to_race: week.weeks_to_race,
+      date_range: formatWeekDateRange(week.week_number),
       headline: week.headline,
       source_pages: week.source_pages,
       has_overrides: Object.keys(assignmentOverrides[week.week_number] ?? {}).length > 0,
@@ -1010,6 +1006,35 @@ function formatDistanceRange(workout: Workout): string {
 function trimKm(value: number): string {
   const rounded = Number(value.toFixed(1));
   return Number.isInteger(rounded) ? String(rounded) : rounded.toString();
+}
+
+function getDayDate(weekNumber: number, dayIndex: number): Date {
+  const daysFromRaceWeekStart = (weekNumber - FINAL_WEEK_NUMBER) * 7 + dayIndex;
+  return new Date(RACE_WEEK_START_UTC + daysFromRaceWeekStart * 24 * 60 * 60 * 1000);
+}
+
+function formatWeekDateRange(weekNumber: number): string {
+  const start = getDayDate(weekNumber, 0);
+  const end = getDayDate(weekNumber, 6);
+  const startDay = String(start.getUTCDate()).padStart(2, "0");
+  const endDay = String(end.getUTCDate()).padStart(2, "0");
+  const startMonth = String(start.getUTCMonth() + 1).padStart(2, "0");
+  const endMonth = String(end.getUTCMonth() + 1).padStart(2, "0");
+
+  if (startMonth === endMonth) {
+    return `${startDay}-${endDay}.${endMonth}`;
+  }
+
+  return `${startDay}.${startMonth}-${endDay}.${endMonth}`;
+}
+
+function formatDayDate(weekNumber: number, dayIndex: number): string {
+  const date = getDayDate(weekNumber, dayIndex);
+  return `${String(date.getUTCDate()).padStart(2, "0")}.${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatIsoDate(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function humanize(value: string): string {

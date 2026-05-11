@@ -7,7 +7,7 @@ import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Theme accentColor="gray" grayColor="sand" radius="large" scaling="95%" appearance="light">
+    <Theme accentColor="gray" grayColor="gray" radius="small" scaling="95%" appearance="light">
       <App />
     </Theme>
   </React.StrictMode>,

@@ -41,6 +41,45 @@ export function profileFromRow(row: PaceTableRow): PaceProfile {
   };
 }
 
+export function profileFrom10kPace(rows: PaceTableRow[], pace: string): PaceProfile {
+  const seconds = parsePaceInput(pace);
+  if (seconds === null) {
+    const firstRow = rows[0];
+    if (!firstRow) {
+      throw new Error("Pace table data is required.");
+    }
+    return profileFromRow(firstRow);
+  }
+
+  const sortedRows = [...rows].sort((left, right) => left.best_10k_pace_seconds_per_km - right.best_10k_pace_seconds_per_km);
+  const firstRow = sortedRows[0];
+  const lastRow = sortedRows[sortedRows.length - 1];
+  if (!firstRow || !lastRow) {
+    throw new Error("Pace table data is required.");
+  }
+
+  const slowerRow = sortedRows.find((row) => row.best_10k_pace_seconds_per_km >= seconds) ?? lastRow;
+  const fasterRow =
+    [...sortedRows].reverse().find((row) => row.best_10k_pace_seconds_per_km <= seconds) ?? firstRow;
+
+  if (fasterRow.row_index === slowerRow.row_index) {
+    return { ...profileFromRow(fasterRow), pace_10k: pace };
+  }
+
+  const span = slowerRow.best_10k_pace_seconds_per_km - fasterRow.best_10k_pace_seconds_per_km;
+  const ratio = span === 0 ? 0 : (seconds - fasterRow.best_10k_pace_seconds_per_km) / span;
+
+  return {
+    km_pace: paceToString(interpolatePace(fasterRow.best_km_pace_seconds_per_km, slowerRow.best_km_pace_seconds_per_km, ratio)),
+    pace_5k: paceToString(interpolatePace(fasterRow.best_5k_pace_seconds_per_km, slowerRow.best_5k_pace_seconds_per_km, ratio)),
+    pace_10k: pace,
+    threshold: paceToString(interpolatePace(fasterRow.threshold_pace_seconds_per_km, slowerRow.threshold_pace_seconds_per_km, ratio)),
+    half: paceToString(interpolatePace(fasterRow.best_half_pace_seconds_per_km, slowerRow.best_half_pace_seconds_per_km, ratio)),
+    marathon: paceToString(interpolatePace(fasterRow.best_marathon_pace_seconds_per_km, slowerRow.best_marathon_pace_seconds_per_km, ratio)),
+    recovery: paceToString(interpolatePace(fasterRow.recovery_pace_seconds_per_km, slowerRow.recovery_pace_seconds_per_km, ratio)),
+  };
+}
+
 export function resolvePaceLabel(paceType: PaceType, profile: PaceProfile): string | null {
   switch (paceType) {
     case "km_pace":
@@ -125,6 +164,10 @@ export function paceToString(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function interpolatePace(fasterSeconds: number, slowerSeconds: number, ratio: number): number {
+  return Math.round(fasterSeconds + (slowerSeconds - fasterSeconds) * ratio);
 }
 
 export function findNearestRow(rows: PaceTableRow[], profile: PaceProfile): PaceTableRow {

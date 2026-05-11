@@ -1,12 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-sand-50: #fcfbf8;
-  --color-sand-100: #f5f1e8;
-  --color-sand-200: #ece4d6;
-  --color-sand-300: #ddd1bb;
-  --color-sand-500: #8a775d;
-  --color-ink-900: #171611;
+  --color-paper-50: #f7f7f5;
+  --color-ink-900: #111111;
 }
 
 @layer base {
@@ -15,7 +11,7 @@
   }
 
   body {
-    @apply bg-sand-50 text-ink-900 antialiased;
+    @apply bg-paper-50 text-ink-900 antialiased;
     font-family:
       Inter,
       ui-sans-serif,
